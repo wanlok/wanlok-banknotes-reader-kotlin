@@ -68,7 +68,7 @@ detect → TTS flow works end-to-end.
   that same thread) calls `startAR()` and posts the result to the main thread;
   `onDetection` fires every frame from the GL render thread and also posts to main.
   Both `./gradlew :app:compileDebugKotlin` and `:app:externalNativeBuildDebug` pass.
-  ⚠️ Not yet exercised at runtime — no caller wires it up yet (see below).
+  **✅ Exercised at runtime and confirmed working** (see `MainActivity.kt` below).
   ⚠️ Latent gap carried over from `VuforiaWrapper.cpp`, not introduced here: its
   `errorMessageCallback`/`vuforiaEngineErrorCallback` do `JavaVM::GetEnv` without
   `AttachCurrentThread`, so if Vuforia ever invokes them from an SDK-internal thread
@@ -89,23 +89,60 @@ detect → TTS flow works end-to-end.
   a `mVuforiaStarted` flag into it) — Android's `worker.isARStarted()` is a cheap native
   query, so `onDrawFrame` just asks it directly each frame instead of syncing a duplicate
   Kotlin-side flag. `./gradlew :app:compileDebugKotlin` passes.
-  ⚠️ Not yet exercised at runtime — nothing constructs a `VuforiaView`/`VuforiaWorker` pair
-  yet (see Detection UI flow below).
+  **✅ Exercised at runtime and confirmed working** (see `MainActivity.kt` below).
+- `app/src/main/java/com/wanlok/banknotesreader/MainActivity.kt` — wires `VuforiaView`/
+  `VuforiaWorker` together for the first time, as a **hardcoded-dataset smoke test**, not
+  the real dataset sync / detection UI flow (both still below). Requests `CAMERA` at
+  runtime via `ActivityResultContracts.RequestPermission`; on grant, copies the real
+  production dataset (bundled as `app/src/main/assets/banknotesReader.{xml,dat}`, fetched
+  from `https://wanlok.github.io/` — not synthetic data, Vuforia databases are trained
+  binaries that can't be fabricated) to `filesDir` on first run and calls
+  `worker.start()` with an **absolute filesystem path** (not a bare relative name) and a
+  **hardcoded** `targetNames` array (`aud_100`/`aud_50`/`aud_20`, read once from the
+  dataset XML) rather than parsing it — XML parsing is still the dataset-sync item below.
+  The absolute-path choice was deliberate: `AppController::createObservers` passes
+  `databasePath` straight to `vuEngineCreateImageTargetObserver` with no documented
+  relative-path resolution rule for Android in the Vuforia headers or PTC's sample (whose
+  own `"StonesAndChips.xml"` relative-path usage isn't reachable/verifiable), so an
+  absolute path sidesteps that ambiguity entirely — and it's what real dataset sync will
+  need anyway (downloaded files, not bundled assets). Detection result flows straight to
+  a `TextView` (`detectionLabel`) with no TTS. The actual `worker.start()` call is
+  deferred to `onResume()` (guarded by a `cameraPermissionGranted` flag set in `onCreate`/
+  the permission callback) rather than fired straight from `onCreate`/the permission
+  callback, to keep camera-touching work off the activity's initial creation path.
+  **✅ Exercised at runtime and confirmed working** on a physical device (Xiaomi/MIUI,
+  Android 13) — live camera passthrough renders, detection label updates.
+- `app/src/main/AndroidManifest.xml` — `CAMERA` permission (+ camera/autofocus/GLES3
+  `<uses-feature>` declarations), plus `INTERNET`/`ACCESS_NETWORK_STATE`/
+  `HIGH_SAMPLING_RATE_SENSORS`. **The latter three were the actual fix for a misleading
+  on-device failure**: `vuEngineCreate` kept returning `VU_ENGINE_CREATION_ERROR_PERMISSION_ERROR`
+  → `AppController::initErrorToString` → *"Vuforia cannot initialize because access to the
+  camera was denied"* — which reads like a `CAMERA` runtime-permission problem, but
+  `CAMERA` was confirmed granted at every layer (`dumpsys package`, `appops get` showing
+  `foreground` mode, MIUI's separate Security-app permission list) and a deliberate 1.9s
+  startup delay ruled out a foreground-timing race too. The real cause: Vuforia needs
+  `INTERNET`/`ACCESS_NETWORK_STATE` to validate the license key against PTC's servers, and
+  `HIGH_SAMPLING_RATE_SENSORS` for its device tracker on Android 12+ — none of which were
+  declared. Found by diffing against PTC's own sample manifest
+  (`~/Downloads/vuforia-sample-11-4-4/Android/app/src/main/AndroidManifest.xml`), which
+  comments all three as "Required by Vuforia." **If a future permission-flavored Vuforia
+  init error shows up again, check this manifest diff first before chasing OS/MIUI
+  permission state.**
+- `app/src/main/assets/banknotesReader.{xml,dat}` — the real hosted dataset, bundled for
+  the hardcoded smoke test above. **Temporary** — remove once dataset sync (below) can
+  download it at runtime instead.
 
 **Not started yet:**
 
 - Dataset sync: download `banknotesReader.xml`/`.dat` from `https://wanlok.github.io/` into
-  app storage, parse `ImageTarget` `name` attributes via `XmlPullParser` (Android equivalent
-  of iOS's `getVuforiaDatasetFilePaths.swift`/`getXMLAttributeValues.swift`).
-- Detection UI flow: Activity/Fragment hosting the camera view, an amount overlay
-  (equivalent of `AmountView.swift`/`AmountDetectionViewController.swift`), and
-  `android.speech.tts.TextToSpeech` integration respecting a "voice enabled" preference and
-  TalkBack state (`AccessibilityManager.isTouchExplorationEnabled()`).
-- Camera runtime permission request flow (`CAMERA`).
-- Not yet confirmed: whether the Vuforia license key embedded in `AppController.cpp` (shared
-  with iOS) needs separate Android registration in the PTC developer portal — the native
-  build compiles and links fine, but `vuEngineCreate` (which validates the license) hasn't
-  been exercised at runtime yet since there's no Kotlin caller.
+  app storage at runtime (rather than the bundled-asset stand-in above), parse `ImageTarget`
+  `name` attributes via `XmlPullParser` (Android equivalent of iOS's
+  `getVuforiaDatasetFilePaths.swift`/`getXMLAttributeValues.swift`) instead of the hardcoded
+  `aud_100`/`aud_50`/`aud_20` array in `MainActivity.kt`.
+- Detection UI flow: a real amount overlay (equivalent of `AmountView.swift`/
+  `AmountDetectionViewController.swift`) replacing `MainActivity`'s plain `detectionLabel`
+  `TextView`, and `android.speech.tts.TextToSpeech` integration respecting a "voice enabled"
+  preference and TalkBack state (`AccessibilityManager.isTouchExplorationEnabled()`).
 
 ## Conventions carried over from the iOS app
 

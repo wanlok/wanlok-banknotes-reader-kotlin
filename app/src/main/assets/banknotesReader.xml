@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QCARConfig>
+  <Tracking>
+    <ImageTarget name="aud_100" size="0.158000 0.065021" />
+    <ImageTarget name="aud_50" size="0.151000 0.064993" />
+    <ImageTarget name="aud_20" size="0.144000 0.064962" />
+  </Tracking>
+</QCARConfig>

@@ -98,11 +98,11 @@ GLESRenderer::renderImageTarget(VuMatrix44F& projectionMatrix, VuMatrix44F& scal
     glUniformMatrix4fv(mUniformColorMvpMatrixHandle, 1, GL_FALSE, &scaledModelViewProjectionMatrix.data[0]);
 
     // Draw translucent overlay
-    glUniform4f(mUniformColorColorHandle, 1.0, 0.0, 0.0, 0.2);
+    glUniform4f(mUniformColorColorHandle, 0.0, 1.0, 0.0, 0.2);
     glDrawElements(GL_TRIANGLES, NUM_SQUARE_INDEX, GL_UNSIGNED_SHORT, (const GLvoid*)&squareIndices[0]);
 
     // Draw solid outline
-    glUniform4f(mUniformColorColorHandle, 1.0, 0.0, 0.0, 1.0);
+    glUniform4f(mUniformColorColorHandle, 0.0, 1.0, 0.0, 1.0);
     glLineWidth(4.0f);
     glDrawElements(GL_LINES, NUM_SQUARE_WIREFRAME_INDEX, GL_UNSIGNED_SHORT, (const GLvoid*)&squareWireframeIndices[0]);
 
