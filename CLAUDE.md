@@ -112,6 +112,13 @@ detect → TTS flow works end-to-end.
   callback, to keep camera-touching work off the activity's initial creation path.
   **✅ Exercised at runtime and confirmed working** on a physical device (Xiaomi/MIUI,
   Android 13) — live camera passthrough renders, detection label updates.
+  `onPause()`/`onResume()` call `VuforiaWorker.pause()`/`resume()` (thin wrappers around
+  the already-private `stopAR()`/`startAR()` externs) — without this, backgrounding the
+  app left the camera capture session dangling once Android reclaimed the camera device,
+  and detection silently stopped working even after returning to the foreground. Matches
+  PTC's own sample (`VuforiaActivity.kt`'s `onPause`/`onResume` call the same pair);
+  `AppController::startAR`/`stopAR` are safe to call repeatedly since they guard on
+  `vuEngineIsRunning()` and don't touch `mEngine`/observers, so no re-init is needed.
 - `app/src/main/AndroidManifest.xml` — `CAMERA` permission (+ camera/autofocus/GLES3
   `<uses-feature>` declarations), plus `INTERNET`/`ACCESS_NETWORK_STATE`/
   `HIGH_SAMPLING_RATE_SENSORS`. **The latter three were the actual fix for a misleading

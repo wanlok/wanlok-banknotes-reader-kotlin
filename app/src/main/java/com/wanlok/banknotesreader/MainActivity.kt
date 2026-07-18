@@ -26,7 +26,9 @@ class MainActivity : AppCompatActivity() {
     private val requestCameraPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         cameraPermissionGranted = granted
         if (granted) {
-            maybeStartVuforia()
+            if (vuforiaView == null) {
+                startVuforia()
+            }
         } else {
             detectionLabel.text = getString(R.string.camera_permission_required)
         }
@@ -48,12 +50,6 @@ class MainActivity : AppCompatActivity() {
             cameraPermissionGranted = true
         } else {
             requestCameraPermission.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    private fun maybeStartVuforia() {
-        if (cameraPermissionGranted && vuforiaView == null) {
-            startVuforia()
         }
     }
 
@@ -92,11 +88,27 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        vuforiaView?.onResume() ?: maybeStartVuforia()
+        val view = vuforiaView
+        if (view == null) {
+            if (cameraPermissionGranted) {
+                startVuforia()
+            }
+        } else {
+            // Reacquire the camera before resuming the render thread: onPause() below
+            // released it via VuforiaWorker.pause(), and Android may have reclaimed the
+            // camera device entirely while backgrounded, so the AR session needs an
+            // explicit restart rather than picking back up where it left off.
+            vuforiaWorker?.resume()
+            view.onResume()
+        }
     }
 
     override fun onPause() {
         vuforiaView?.onPause()
+        // Release the camera while backgrounded; without this the camera capture session
+        // is left dangling once Android reclaims the device, and detection silently stops
+        // working even after the app is foregrounded again.
+        vuforiaWorker?.pause()
         super.onPause()
     }
 

@@ -24,6 +24,19 @@ class VuforiaWorker(private val activity: Activity, private val callback: (Strin
         deinitAR()
     }
 
+    /// Releases the camera without tearing down the engine/observers, so the app doesn't hold
+    /// the camera while backgrounded (matches PTC's own sample: VuforiaActivity.kt's onPause
+    /// calls stopAR, not the full stop()/deinitAR() teardown this class also exposes).
+    fun pause() {
+        stopAR()
+    }
+
+    /// Reacquires the camera on an already-initialized engine; startAR() is safe to call
+    /// again since stopAR() (see [pause]) doesn't destroy mEngine or its observers.
+    fun resume() {
+        startAR()
+    }
+
     external fun isARStarted(): Boolean
     external fun cameraPerformAutoFocus()
     external fun cameraRestoreAutoFocus()
