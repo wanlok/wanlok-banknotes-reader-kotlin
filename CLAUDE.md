@@ -6,9 +6,11 @@ banknotes via camera-based image recognition and announces the currency/amount v
 text-to-speech.
 
 The port is scoped to **Vuforia only, first** (not ARCore, not a Vision-based approach,
-not the Dummy placeholder iOS also has). Settings screens, language switching, other
-detection methods, and full Room/dataset caching parity are deferred until the Vuforia
-detect → TTS flow works end-to-end.
+not the Dummy placeholder iOS also has). Language switching and full Room/dataset caching
+parity are deferred until the Vuforia detect → TTS flow works end-to-end. Settings now has
+a minimal presence (see bottom nav bar below) — just enough to mirror iOS's shape
+(Detection Method / Dataset rows), not full parity (no method switching, since only Vuforia
+is ported; no language settings).
 
 ## Reference material
 
@@ -90,35 +92,53 @@ detect → TTS flow works end-to-end.
   query, so `onDrawFrame` just asks it directly each frame instead of syncing a duplicate
   Kotlin-side flag. `./gradlew :app:compileDebugKotlin` passes.
   **✅ Exercised at runtime and confirmed working** (see `MainActivity.kt` below).
-- `app/src/main/java/com/wanlok/banknotesreader/MainActivity.kt` — wires `VuforiaView`/
-  `VuforiaWorker` together for the first time, as a **hardcoded-dataset smoke test**, not
-  the real dataset sync / detection UI flow (both still below). Requests `CAMERA` at
-  runtime via `ActivityResultContracts.RequestPermission`; on grant, copies the real
-  production dataset (bundled as `app/src/main/assets/banknotesReader.{xml,dat}`, fetched
-  from `https://wanlok.github.io/` — not synthetic data, Vuforia databases are trained
-  binaries that can't be fabricated) to `filesDir` on first run and calls
-  `worker.start()` with an **absolute filesystem path** (not a bare relative name) and a
-  **hardcoded** `targetNames` array (`aud_100`/`aud_50`/`aud_20`, read once from the
-  dataset XML) rather than parsing it — XML parsing is still the dataset-sync item below.
-  The absolute-path choice was deliberate: `AppController::createObservers` passes
-  `databasePath` straight to `vuEngineCreateImageTargetObserver` with no documented
-  relative-path resolution rule for Android in the Vuforia headers or PTC's sample (whose
-  own `"StonesAndChips.xml"` relative-path usage isn't reachable/verifiable), so an
-  absolute path sidesteps that ambiguity entirely — and it's what real dataset sync will
-  need anyway (downloaded files, not bundled assets). Detection result flows straight to
-  a `TextView` (`detectionLabel`) with no TTS. The actual `worker.start()` call is
-  deferred to `onResume()` (guarded by a `cameraPermissionGranted` flag set in `onCreate`/
-  the permission callback) rather than fired straight from `onCreate`/the permission
-  callback, to keep camera-touching work off the activity's initial creation path.
-  **✅ Exercised at runtime and confirmed working** on a physical device (Xiaomi/MIUI,
-  Android 13) — live camera passthrough renders, detection label updates.
-  `onPause()`/`onResume()` call `VuforiaWorker.pause()`/`resume()` (thin wrappers around
-  the already-private `stopAR()`/`startAR()` externs) — without this, backgrounding the
-  app left the camera capture session dangling once Android reclaimed the camera device,
-  and detection silently stopped working even after returning to the foreground. Matches
-  PTC's own sample (`VuforiaActivity.kt`'s `onPause`/`onResume` call the same pair);
-  `AppController::startAR`/`stopAR` are safe to call repeatedly since they guard on
-  `vuEngineIsRunning()` and don't touch `mEngine`/observers, so no re-init is needed.
+- `app/src/main/java/com/wanlok/banknotesreader/MainActivity.kt` — now just the bottom-nav
+  shell (see below); the Vuforia wiring that used to live here directly moved to
+  `CameraFragment.kt` when the bottom nav bar was added.
+- **Bottom navigation bar** (Camera / Settings tabs), mirroring iOS's `UITabBarController`
+  (`SceneDelegate.swift`) — deliberately trimmed to what this port actually supports rather
+  than a literal port: iOS's Camera tab dynamically swaps between ARKit/Vuforia/Dummy
+  detection controllers (default ARKit) and Settings has a full method-picker; Android only
+  ever has Vuforia, so Camera is fixed and Settings is scoped to just the Detection Method
+  (single, always-checkmarked "Vuforia" row) and Dataset rows, dropping ARKit/Dummy/Vision
+  and language settings entirely. **✅ Exercised at runtime and confirmed working**
+  end-to-end (tab switching, back-stack, Vuforia pause/resume across tab switches) on a
+  physical device.
+  - `MainActivity.kt` — hosts a `BottomNavigationView` + a `fragmentContainer`. Adds
+    `CameraFragment` and `SettingsFragment` once (`savedInstanceState == null`) and toggles
+    between them via `show()`/`hide()` (never `replace()`), so switching tabs doesn't tear
+    down/reinitialize the Vuforia session. `showTab()` also calls
+    `setPrimaryNavigationFragment()` on the active tab so the system back button correctly
+    delegates to whichever tab's own back stack is deepest (needed for Settings' internal
+    push navigation below).
+  - `CameraFragment.kt` — the Vuforia flow, moved verbatim from the old `MainActivity.kt`
+    (permission handling, `VuforiaWorker`/`VuforiaView` construction, `onPause`/`onResume`
+    calling `pause()`/`resume()`). Adds one thing: `onHiddenChanged(hidden)` also calls
+    `vuforiaWorker.pause()`/`resume()` when `MainActivity` shows/hides this tab — reuses the
+    exact same pause/resume pair built for Activity-level backgrounding rather than
+    reinitializing Vuforia on every tab switch (which naive `replace()`-based tab switching
+    would otherwise force).
+  - `DatasetAssets.kt` — new shared object extracted from the old `MainActivity.kt`'s
+    dataset-asset-copying logic, now used by both `CameraFragment` and `DatasetFragment`.
+    `TARGET_NAMES` stays **hardcoded** (not parsed) — still intentionally decoupled from the
+    XML, since that's the separate dataset-sync work below. Also adds `parseTargets()`
+    (`XmlPullParser` over `ImageTarget` name/size attributes) — used **only** to populate
+    the Dataset settings screen, not to drive detection; this is the first real XML parsing
+    in the repo, and a natural head start on the dataset-sync work below.
+  - `SettingsFragment.kt` — nav host for the Settings tab, matching iOS's
+    `UINavigationController` wrapping `SettingLandingViewController`: owns its own child
+    `FragmentManager` so its push navigation (landing → Detection Method / Dataset) stays
+    isolated from `MainActivity`'s top-level tab-switching `FragmentManager` — pushing a
+    sub-screen here must not tear down the (possibly hidden) `CameraFragment` living in that
+    other `FragmentManager`. `SettingsLandingFragment.kt` is the actual two-row list.
+  - `DetectionMethodFragment.kt` — matches iOS's `DetectionMethodViewController`, minus the
+    list: always a single checkmarked "Vuforia" row. Kept as a real screen (not dropped)
+    purely to keep the Settings shape consistent with iOS.
+  - `DatasetFragment.kt` — matches iOS's `VuforiaDatasetViewController`: lists real parsed
+    targets (name/size) via `DatasetAssets.parseTargets()`, with a toolbar "Sync" action and
+    an empty-state placeholder. **"Sync" is a placeholder** — it just re-copies the bundled
+    assets rather than downloading fresh ones from `https://wanlok.github.io/`; real network
+    sync is still the dataset-sync item below. Otherwise fully functional today.
 - `app/src/main/AndroidManifest.xml` — `CAMERA` permission (+ camera/autofocus/GLES3
   `<uses-feature>` declarations), plus `INTERNET`/`ACCESS_NETWORK_STATE`/
   `HIGH_SAMPLING_RATE_SENSORS`. **The latter three were the actual fix for a misleading
@@ -142,12 +162,15 @@ detect → TTS flow works end-to-end.
 **Not started yet:**
 
 - Dataset sync: download `banknotesReader.xml`/`.dat` from `https://wanlok.github.io/` into
-  app storage at runtime (rather than the bundled-asset stand-in above), parse `ImageTarget`
-  `name` attributes via `XmlPullParser` (Android equivalent of iOS's
-  `getVuforiaDatasetFilePaths.swift`/`getXMLAttributeValues.swift`) instead of the hardcoded
-  `aud_100`/`aud_50`/`aud_20` array in `MainActivity.kt`.
+  app storage at runtime (rather than the bundled-asset stand-in in `DatasetAssets.kt`),
+  parse `ImageTarget` `name` attributes via `XmlPullParser` (already exists as
+  `DatasetAssets.parseTargets()`, currently only used to populate the Dataset settings
+  screen — Android equivalent of iOS's `getVuforiaDatasetFilePaths.swift`/
+  `getXMLAttributeValues.swift`) instead of the hardcoded `TARGET_NAMES` array. Also needs
+  `DatasetFragment`'s "Sync" action wired to the real download instead of its current
+  re-copy-bundled-assets placeholder.
 - Detection UI flow: a real amount overlay (equivalent of `AmountView.swift`/
-  `AmountDetectionViewController.swift`) replacing `MainActivity`'s plain `detectionLabel`
+  `AmountDetectionViewController.swift`) replacing `CameraFragment`'s plain `detectionLabel`
   `TextView`, and `android.speech.tts.TextToSpeech` integration respecting a "voice enabled"
   preference and TalkBack state (`AccessibilityManager.isTouchExplorationEnabled()`).
 

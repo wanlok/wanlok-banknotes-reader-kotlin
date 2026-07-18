@@ -3,4 +3,15 @@
     <string name="point_camera_at_banknote">Point camera at a banknote</string>
     <string name="camera_permission_required">Camera permission is required to detect banknotes</string>
     <string name="vuforia_start_failed">Failed to start Vuforia</string>
+
+    <string name="camera_title">Camera</string>
+    <string name="setting_landing_title">Settings</string>
+    <string name="setting_landing_detection_method">Detection Method</string>
+    <string name="setting_landing_dataset">Dataset</string>
+    <string name="detection_method_title">Detection Method</string>
+    <string name="detection_method_vuforia">Vuforia</string>
+    <string name="dataset_title">Dataset</string>
+    <string name="dataset_sync">Sync</string>
+    <string name="dataset_empty_title">Empty Dataset</string>
+    <string name="dataset_empty_message">Please tap the \"Sync\" button above to load the dataset.</string>
 </resources>
