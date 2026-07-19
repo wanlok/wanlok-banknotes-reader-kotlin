@@ -42,6 +42,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /// Called by DatasetFragment after a successful sync so a Camera tab already running
+    /// (possibly with a stale/empty target list, since it's kept alive via show()/hide()
+    /// rather than recreated on every tab switch) picks up the freshly downloaded dataset.
+    fun onDatasetSynced() {
+        (supportFragmentManager.findFragmentByTag(TAG_CAMERA) as? CameraFragment)?.restartVuforia()
+    }
+
     private fun showTab(tag: String) {
         val target = supportFragmentManager.findFragmentByTag(tag) ?: return
         supportFragmentManager.commit {

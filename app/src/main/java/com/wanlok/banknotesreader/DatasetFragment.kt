@@ -9,14 +9,11 @@ import androidx.fragment.app.Fragment
 import com.google.android.material.appbar.MaterialToolbar
 
 /// Matches iOS's VuforiaDatasetViewController: lists the dataset's targets (name/size) with
-/// a toolbar "Sync" action, falling back to an empty-state placeholder like iOS's
-/// PlaceholderView when there's nothing to show.
-///
-/// Unlike iOS, "Sync" here just re-copies the bundled assets rather than downloading fresh
-/// ones from https://wanlok.github.io/ - real dataset sync is still separate, unbuilt work
-/// (see CLAUDE.md). This screen is otherwise fully functional today against whatever
-/// dataset CameraFragment is actually using.
+/// a toolbar "Sync" action that downloads fresh ones from https://wanlok.github.io/, falling
+/// back to an empty-state placeholder like iOS's PlaceholderView when there's nothing to show.
 class DatasetFragment : Fragment(R.layout.fragment_dataset) {
+
+    private var syncing = false
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -36,8 +33,22 @@ class DatasetFragment : Fragment(R.layout.fragment_dataset) {
     }
 
     private fun sync() {
-        DatasetAssets.copyIfNeeded(requireContext())
-        reload()
+        if (syncing) {
+            return
+        }
+        syncing = true
+        requireView().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_sync).isEnabled = false
+        DatasetAssets.sync(requireContext()) { success ->
+            syncing = false
+            if (!isAdded) {
+                return@sync
+            }
+            requireView().findViewById<MaterialToolbar>(R.id.toolbar).menu.findItem(R.id.action_sync).isEnabled = true
+            if (success) {
+                reload()
+                (activity as? MainActivity)?.onDatasetSynced()
+            }
+        }
     }
 
     private fun reload() {

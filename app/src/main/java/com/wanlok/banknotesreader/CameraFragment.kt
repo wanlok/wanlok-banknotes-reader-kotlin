@@ -12,10 +12,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 
-/// Hardcoded-dataset smoke test for the Vuforia detect flow: bundles the real
-/// banknotesReader.xml/.dat as assets (rather than the eventual runtime download/sync)
-/// and wires VuforiaView/VuforiaWorker together end-to-end once CAMERA is granted.
-/// Matches iOS's Camera tab, scoped to Vuforia only - no detection-method switching.
+/// Starts Vuforia against whatever dataset is currently synced locally (possibly none yet -
+/// see DatasetAssets/DatasetFragment) and wires VuforiaView/VuforiaWorker together end-to-end
+/// once CAMERA is granted. Matches iOS's Camera tab, scoped to Vuforia only - no
+/// detection-method switching.
 class CameraFragment : Fragment(R.layout.fragment_camera) {
 
     private lateinit var detectionLabel: TextView
@@ -50,7 +50,11 @@ class CameraFragment : Fragment(R.layout.fragment_camera) {
     }
 
     private fun startVuforia() {
-        val datasetPath = DatasetAssets.copyIfNeeded(requireContext())
+        // Whatever's synced locally right now - possibly nothing yet, which is fine: Vuforia
+        // starts fine with zero targets (AppController::createObservers just skips the loop),
+        // it simply won't recognize anything until a sync from the Dataset settings screen
+        // provides real targets and restartVuforia() below picks them up.
+        val targetNames = DatasetAssets.parseTargets(requireContext()).map { it.name }.toTypedArray()
 
         val worker = VuforiaWorker(requireActivity()) { targetName ->
             if (isAdded) {
@@ -63,11 +67,26 @@ class CameraFragment : Fragment(R.layout.fragment_camera) {
         vuforiaView = view
         requireView().findViewById<FrameLayout>(R.id.vuforiaContainer).addView(view)
 
-        worker.start(datasetPath, DatasetAssets.TARGET_NAMES) { started ->
+        worker.start(DatasetAssets.datasetPath(requireContext()), targetNames) { started ->
             if (isAdded && !started) {
                 detectionLabel.text = getString(R.string.vuforia_start_failed)
             }
         }
+    }
+
+    /// Called by MainActivity after a successful Dataset sync so a Vuforia session already
+    /// running with stale (possibly empty) targets picks up the newly downloaded ones -
+    /// AppController's image target observers are only created once at initAR time, so this
+    /// tears down and re-starts rather than trying to hot-swap them.
+    fun restartVuforia() {
+        if (!isAdded) {
+            return
+        }
+        vuforiaWorker?.stop()
+        vuforiaView?.let { requireView().findViewById<FrameLayout>(R.id.vuforiaContainer).removeView(it) }
+        vuforiaView = null
+        vuforiaWorker = null
+        startVuforia()
     }
 
     override fun onResume() {
