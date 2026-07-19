@@ -183,11 +183,19 @@ is ported; no language settings).
     list: always a single checkmarked "Vuforia" row. Kept as a real screen (not dropped)
     purely to keep the Settings shape consistent with iOS.
   - `DatasetFragment.kt` — matches iOS's `VuforiaDatasetViewController`: lists real parsed
-    targets (name/size) via `DatasetAssets.parseTargets()`, with a toolbar "Sync" action
-    (real network download, disabled while in flight to prevent duplicate concurrent syncs)
-    and an empty-state placeholder for a fresh/never-synced install. On a successful sync,
-    also calls `MainActivity.onDatasetSynced()` so a live Camera tab picks up the new
-    targets (see `CameraFragment.kt` above).
+    targets (name/size) via `DatasetAssets.parseTargets()` in a `RecyclerView`
+    (`targetRecyclerView` + `DatasetAdapter.kt`), with a toolbar "Sync" action (real network
+    download, disabled while in flight to prevent duplicate concurrent syncs) and an
+    empty-state placeholder for a fresh/never-synced install. On a successful sync, also
+    calls `MainActivity.onDatasetSynced()` so a live Camera tab picks up the new targets (see
+    `CameraFragment.kt` above). **No swipe-to-delete** — checked iOS's actual source before
+    considering porting one: it only exists on `ARKitDatasetViewController` (deletes a cached
+    per-item Core Data `BanknoteEntity`, specific to the unported ARKit detection method).
+    `VuforiaDatasetViewController` (what this screen actually mirrors) has no delete action —
+    Vuforia's dataset is one opaque server-built `.xml`+`.dat` pair, not individually
+    addressable per-target entities, so there's no clean client-side equivalent. Left
+    unbuilt rather than inventing new semantics (e.g. "exclude a target from detection
+    without touching the files") without user sign-off.
 - `app/src/main/AndroidManifest.xml` — `CAMERA` permission (+ camera/autofocus/GLES3
   `<uses-feature>` declarations), plus `INTERNET`/`ACCESS_NETWORK_STATE`/
   `HIGH_SAMPLING_RATE_SENSORS`. **The latter three were the actual fix for a misleading
@@ -224,6 +232,11 @@ is ported; no language settings).
 - `AppController` target is always `IMAGE_TARGET_ID` (`0`) — Model Targets are unused.
 - Dataset file base name: `banknotesReader` (`.xml`/`.dat`, hosted at
   `https://wanlok.github.io/banknotesReader.{xml,dat}`).
+
+## Naming conventions
+
+- View IDs (`android:id`) should name the component's type, not just its role — e.g. a
+  `RecyclerView` listing targets is `targetRecyclerView`, not `targetList`.
 
 ## Working with this user
 

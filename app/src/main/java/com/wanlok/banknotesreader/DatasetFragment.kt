@@ -1,11 +1,10 @@
 package com.wanlok.banknotesreader
 
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
-import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 
 /// Matches iOS's VuforiaDatasetViewController: lists the dataset's targets (name/size) with
@@ -14,6 +13,7 @@ import com.google.android.material.appbar.MaterialToolbar
 class DatasetFragment : Fragment(R.layout.fragment_dataset) {
 
     private var syncing = false
+    private val adapter = DatasetAdapter()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
@@ -28,6 +28,10 @@ class DatasetFragment : Fragment(R.layout.fragment_dataset) {
                 false
             }
         }
+
+        val targetRecyclerView = view.findViewById<RecyclerView>(R.id.targetRecyclerView)
+        targetRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        targetRecyclerView.adapter = adapter
 
         reload()
     }
@@ -53,18 +57,9 @@ class DatasetFragment : Fragment(R.layout.fragment_dataset) {
 
     private fun reload() {
         val targets = DatasetAssets.parseTargets(requireContext())
+        adapter.submitList(targets)
 
-        val targetList = requireView().findViewById<LinearLayout>(R.id.targetList)
-        targetList.removeAllViews()
-        val inflater = LayoutInflater.from(requireContext())
-        for (target in targets) {
-            val row = inflater.inflate(R.layout.item_dataset_target, targetList, false)
-            row.findViewById<TextView>(R.id.targetName).text = target.name
-            row.findViewById<TextView>(R.id.targetSize).text = target.size
-            targetList.addView(row)
-        }
-
-        requireView().findViewById<View>(R.id.targetListScroll).visibility = if (targets.isEmpty()) View.GONE else View.VISIBLE
+        requireView().findViewById<View>(R.id.targetRecyclerView).visibility = if (targets.isEmpty()) View.GONE else View.VISIBLE
         requireView().findViewById<View>(R.id.emptyState).visibility = if (targets.isEmpty()) View.VISIBLE else View.GONE
     }
 }
