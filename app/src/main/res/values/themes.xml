@@ -2,7 +2,11 @@
     <!-- Base application theme. -->
     <style name="Base.Theme.Banknotesreader" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/grey_1</item>
+        <item name="colorOnPrimary">@color/black</item>
+        <item name="colorSecondaryContainer">@color/grey_1</item>
+        <item name="colorOnSecondaryContainer">@color/black</item>
+        <item name="colorOnSurfaceVariant">@color/grey_3</item>
     </style>
 
     <style name="Theme.Banknotesreader" parent="Base.Theme.Banknotesreader" />
