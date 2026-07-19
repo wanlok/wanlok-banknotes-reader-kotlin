@@ -22,6 +22,10 @@ class VuforiaWorker(private val activity: Activity, private val callback: (Strin
     fun stop() {
         stopAR()
         deinitAR()
+        // Drops any onDetection/initDone posts already queued on the main Handler from just
+        // before teardown - without this they'd still run afterward against a fragment/activity
+        // that's by then detached (crashes calling getString() -> requireContext()).
+        mainHandler.removeCallbacksAndMessages(null)
     }
 
     /// Releases the camera without tearing down the engine/observers, so the app doesn't hold

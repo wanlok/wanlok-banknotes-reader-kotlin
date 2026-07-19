@@ -77,6 +77,14 @@ is ported; no language settings).
   (not one that called into JNI itself), the callback silently no-ops. `initDone` and
   `onDetection` are unaffected since they always fire on a thread that's already inside
   a JNI call (the `start()` background thread / the GL render thread).
+  `stop()` also calls `mainHandler.removeCallbacksAndMessages(null)` — found via an actual
+  on-device crash on rotation (Activity has no `configChanges` override, so it's fully
+  destroyed/recreated): an `onDetection`/`initDone` post already queued right before
+  `CameraFragment.onDestroyView()` → `worker.stop()` would otherwise still run afterward
+  against the by-then-detached fragment (`getString()` → `requireContext()` throws
+  `IllegalStateException`). `CameraFragment.kt`'s two `VuforiaWorker` UI callbacks also
+  guard with `isAdded` as a second layer, for the case where a callback is already mid-flight
+  on the main looper when teardown starts.
 - `app/src/main/java/com/wanlok/banknotesreader/VuforiaView.kt` — `GLSurfaceView`-based
   camera view, Android's equivalent of iOS's `VuforiaView.swift` (`CADisplayLink` +
   `CAMetalLayer`). Implements `GLSurfaceView.Renderer`: `onSurfaceCreated` →
@@ -110,7 +118,20 @@ is ported; no language settings).
     down/reinitialize the Vuforia session. `showTab()` also calls
     `setPrimaryNavigationFragment()` on the active tab so the system back button correctly
     delegates to whichever tab's own back stack is deepest (needed for Settings' internal
-    push navigation below).
+    push navigation below). Its `enableEdgeToEdge()` insets listener only pads `main` for
+    `systemBars.left/top/right`, deliberately excluding bottom — `bottomNavigation` consumes
+    its own bottom inset (Material's real, working default behavior for edge-to-edge; the
+    `paddingBottomSystemWindowInsets` XML attribute some Material docs/snippets reference
+    turned out to be a no-op in this Material version, confirmed by decompiling
+    `material-1.10.0.aar` — nothing in it actually reads that attribute). Padding both root
+    and the nav view for the same bottom inset was double-counting it, showing as dead white
+    space below the Camera/Settings labels; letting the nav view own it is also what makes
+    the bar's background correctly extend under 3-button/gesture nav rather than stopping
+    short of it. Left/right padding stays on `main` for landscape (side nav bar / cutouts);
+    currently unverified in practice since the app has no orientation lock and no landscape
+    layout pass has been done — **a real decision still pending**: lock to portrait (this is
+    a one-handed camera-pointing UX, arguably the better fit, and would let this insets
+    handling drop the left/right case entirely) vs. actually support landscape.
   - `CameraFragment.kt` — the Vuforia flow, moved verbatim from the old `MainActivity.kt`
     (permission handling, `VuforiaWorker`/`VuforiaView` construction, `onPause`/`onResume`
     calling `pause()`/`resume()`). Adds one thing: `onHiddenChanged(hidden)` also calls
@@ -118,6 +139,10 @@ is ported; no language settings).
     exact same pause/resume pair built for Activity-level backgrounding rather than
     reinitializing Vuforia on every tab switch (which naive `replace()`-based tab switching
     would otherwise force).
+  - `res/values/colors.xml` — all color values used by layouts route through here now
+    (`black`/`white`/`detection_label_background`); no more raw hex in layout XML. Doesn't
+    reach into `GLESRenderer.cpp`'s detection-highlight green — that's raw GL floats, a
+    separate system with no Android resource equivalent.
   - `DatasetAssets.kt` — new shared object extracted from the old `MainActivity.kt`'s
     dataset-asset-copying logic, now used by both `CameraFragment` and `DatasetFragment`.
     `TARGET_NAMES` stays **hardcoded** (not parsed) — still intentionally decoupled from the

@@ -53,7 +53,9 @@ class CameraFragment : Fragment(R.layout.fragment_camera) {
         val datasetPath = DatasetAssets.copyIfNeeded(requireContext())
 
         val worker = VuforiaWorker(requireActivity()) { targetName ->
-            detectionLabel.text = targetName ?: getString(R.string.point_camera_at_banknote)
+            if (isAdded) {
+                detectionLabel.text = targetName ?: getString(R.string.point_camera_at_banknote)
+            }
         }
         vuforiaWorker = worker
 
@@ -62,7 +64,7 @@ class CameraFragment : Fragment(R.layout.fragment_camera) {
         requireView().findViewById<FrameLayout>(R.id.vuforiaContainer).addView(view)
 
         worker.start(datasetPath, DatasetAssets.TARGET_NAMES) { started ->
-            if (!started) {
+            if (isAdded && !started) {
                 detectionLabel.text = getString(R.string.vuforia_start_failed)
             }
         }
